@@ -1,28 +1,43 @@
 import streamlit as st
+import numpy as np
+from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.models import load_model
-from PIL import Image
-import numpy as np
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
-# Load the trained model
-model = load_model('bird_drone_classifier.h5')
+# Constants
+TARGET_SIZE = 180
 
-st.title("Bird vs Drone Image Classifier")
+# Load model
+@st.cache_resource
+def load_my_model():
+    return load_model("model.h5")
 
-uploaded_file = st.file_uploader("Upload an image...", type=["jpg", "jpeg", "png"])
+model = load_my_model()
 
-target_size = 180  # Should match your training/preprocessing size
+# Preprocess uploaded image
+def preprocess_image(image):
+    image = image.convert("RGB")
+    image = image.resize((TARGET_SIZE, TARGET_SIZE))
+    image = np.array(image)
+    image = preprocess_input(image)
+    image = np.expand_dims(image, axis=0)
+    return image
+
+# UI
+st.title("Bird vs. Drone Classifier")
+st.write("Upload an image to classify it as a bird or a drone.")
+
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert('RGB')
-    image_resized = image.resize((target_size, target_size))
-    st.image(image, caption='Uploaded Image', use_column_width=True)
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Uploaded Image", use_column_width=True)
 
-    img_array = np.array(image_resized) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+    processed_image = preprocess_image(image)
+    prediction = model.predict(processed_image)
+    class_names = ['Bird', 'Drone']
+    predicted_class = class_names[np.argmax(prediction)]
 
-    prediction = model.predict(img_array)[0][0]
-    label = "Drone" if prediction > 0.5 else "Bird"
-    confidence = prediction if prediction > 0.5 else 1 - prediction
-
-    st.write(f"Prediction: **{label}** with confidence {confidence:.2f}")
+    st.write("### Prediction:", predicted_class)
+    st.write("Confidence:", f"{np.max(prediction)*100:.2f}%")
